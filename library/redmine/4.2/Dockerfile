@@ -1,4 +1,4 @@
-FROM library/redmine:3.1-passenger
+FROM library/redmine:4.2
 ARG DO_UPDATE=y
 ARG NONINTERACTIVE=y
 ARG INSTALL_DEFAULT_LOCALE="fr_FR.UTF-8"

@@ -25,6 +25,9 @@
 4.1
 4.1-alpine
 4.1-passenger
+4.2
+4.2-alpine
+4.2-passenger
 alpine
 latest
 passenger
