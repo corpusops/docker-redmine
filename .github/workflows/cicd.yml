@@ -65,6 +65,8 @@ jobs:
       fail-fast: false
       matrix:
         IMAGES:
+        - "library/redmine/5.1 library/redmine/5.1-alpine"
+        - "library/redmine/5 library/redmine/5-alpine"
         - "library/redmine/4-passenger"
         #- "corpusops/test/a corpusops/test/b corpusops/test/c"
         # all images that werent explicitly told to be built would be built in the next batches

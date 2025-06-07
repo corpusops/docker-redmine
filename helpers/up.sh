@@ -18,7 +18,7 @@ _cops_SYSTEM=$(system_detect.sh||./system_detect.sh||"$W/system_detect.sh")
 DISTRIB_ID=
 DISTRIB_CODENAME=
 DISTRIB_RELEASE=
-oldubuntu="^(10\.|12\.|13\.|14\.|15\.|16\.|17\.|18\.10|19\.|20\.10|21\.)"
+oldubuntu="^(10\.|12\.|13\.|14\.|15\.|16\.|17\.|18\.10|19\.|20\.10|21\.|22\.10)"
 # oldubuntu="^(10\.|12\.|13\.|14.10|15\.|16.10|17\.04)"
 NOSOCAT=""
 CENTOS_OLDSTABLE=8
@@ -63,7 +63,7 @@ if [ "x${DISTRIB_ID}" = "xcentos" ] && ( echo  "${DISTRIB_MAJOR}" | grep -Eq "^(
 fi
 if ( echo $DISTRIB_ID | grep -E -iq "centos|red|fedora" );then
     if (echo $DISTRIB_ID|grep -E -iq centos);then
-        if [ "$DISTRIB_RELEASE" = "7" ];then
+        if (echo "$DISTRIB_RELEASE"|egrep -q "8|7");then
             OCENTOSMIRROR="${OCENTOSMIRROR:-mirror.centos.org}"
             NCENTOSMIRROR="${NCENTOSMIRROR:-vault.centos.org}"
         elif [ $DISTRIB_RELEASE -le $CENTOS_OLDSTABLE ];then
@@ -102,7 +102,7 @@ if [ -e /etc/redhat-release ];then
         yuminstall findutils
     fi
 fi
-DEBIAN_OLDSTABLE=8
+DEBIAN_OLDSTABLE=9
 PG_DEBIAN_OLDSTABLE=9
 find /etc -name "*.reactivate" | while read f;do
     mv -fv "$f" "$(basename $f .reactivate)"
@@ -121,6 +121,7 @@ if (echo $DISTRIB_ID | grep -E -iq "debian");then
         if (echo $DISTRIB_RELEASE | grep -E -iq stretch );then  DISTRIB_CODENAME="$DISTRIB_RELEASE";DISTRIB_RELEASE="9" ;fi
         if (echo $DISTRIB_RELEASE | grep -E -iq buster );then   DISTRIB_CODENAME="$DISTRIB_RELEASE";DISTRIB_RELEASE="10";fi
         if (echo $DISTRIB_RELEASE | grep -E -iq bullseye );then DISTRIB_CODENAME="$DISTRIB_RELEASE";DISTRIB_RELEASE="11";fi
+        if (echo $DISTRIB_RELEASE | grep -E -iq bookworm );then DISTRIB_CODENAME="$DISTRIB_RELEASE";DISTRIB_RELEASE="12";fi
     fi
     sed -i -re "s/(old)?oldstable/$DISTRIB_CODENAME/g" $(find /etc/apt/sources.list* -type f)
     NAPTMIRROR="${NDEBIANMIRROR}"
@@ -162,7 +163,7 @@ if ( echo $DISTRIB_ID | grep -E -iq "debian|mint|ubuntu" );then
         sed -i -re "s!sid(/)?!$DISTRIB_CODENAME\1!" $(find /etc/apt/sources.list* -type f)
         OAPTMIRROR="${OAPTMIRROR:-$ODEBIANMIRROR}"
         sed -i -r -e '/-updates|security.debian.org/d' $( find /etc/apt/sources.list* -type f; )
-        if (echo $DISTRIB_ID|grep -E -iq debian) && [ $DISTRIB_RELEASE -eq $DEBIAN_OLDSTABLE ];then
+        if (echo $DISTRIB_ID|grep -E -iq debian) && [ $DISTRIB_RELEASE -eq $DEBIAN_OLDSTABLE ] && [ $DEBIAN_OLDSTABLE -lt 9 ];then
             log "Using debian LTS packages"
             echo "$DEBIAN_LTS_SOURCELIST" >> /etc/apt/sources.list
             rm -rvf /var/lib/apt/*
@@ -174,10 +175,10 @@ if ( echo $DISTRIB_ID | grep -E -iq "debian|mint|ubuntu" );then
     if (echo $DISTRIB_ID|grep -E -iq debian) && [ -e $pglist ] && [ $DISTRIB_RELEASE -le $PG_DEBIAN_OLDSTABLE ] && [ -e /etc/apt/sources.list.d/pgdg.list ];then
         sed -i -re "s/apt.postgresql/apt-archive.postgresql/g" -e "s/http:/https:/g" /etc/apt/sources.list.d/pgdg.list
     fi
-    # 16.04/14.04 is not yet on old mirrors and were switched back to regular mirrors
     if [ "x$OAPTMIRROR" != "x" ];then
         printf 'Acquire::Check-Valid-Until no;\nAPT{ Get { AllowUnauthenticated "1"; }; };\n\n'>/etc/apt/apt.conf.d/nogpgverif
-        if (echo $DISTRIB_RELEASE |grep -E -iq "14.04|16.04");then
+        # 16.04/14.04 is not yet on old mirrors and were switched back to regular mirrors
+        if (echo $DISTRIB_RELEASE |grep -E -iq "14.04|16.04|18.04");then
             echo "Patching APT to use $SNAPTMIRROR" >&2
             sed -i -r \
                 -e 's/^(deb.*ubuntu)\/?(.*-(security|backport|updates).*)/#\1\/\2/g' \
@@ -191,6 +192,13 @@ if ( echo $DISTRIB_ID | grep -E -iq "debian|mint|ubuntu" );then
                 -e 's!'$NAPTMIRROR'!'$OAPTMIRROR'!g' \
                 $( find /etc/apt/sources.list* -type f; )
         fi
+    fi
+    if (echo $DISTRIB_RELEASE |grep -E -iq "18.04") && (grep -q cuda $(find /etc/apt/sources.list* -type f));then
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-keyring_1.0-1_all.deb || curl -O https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-keyring_1.0-1_all.deb
+        dpkg -i cuda-keyring_1.0-1_all.deb
+        sed -i -re "/cuda/d" /etc/apt/sources.list
+        rm -f /etc/apt/sources.list.d/cuda-ubuntu1804-x86_64.list || true
+        apt-key adv --keyserver keyserver.ubuntu.com --recv A4B469963BF863CC F60F4B3D7FA2AF80
     fi
     if ( (echo $DISTRIB_ID|grep -E -iq "mint|ubuntu" ) && ( echo $DISTRIB_RELEASE |grep -E -iq $oldubuntu); ) ||\
        ( (echo $DISTRIB_ID|grep -E -iq debian) && [ $DISTRIB_RELEASE -le $DEBIAN_OLDSTABLE ]; ) ||\
@@ -260,6 +268,10 @@ if ( echo "$DISTRIB_ID $DISTRIB_RELEASE $DISTRIB_CODENAME" | grep -E -iq alpine 
     fi
 fi
 ./bin/fix_letsencrypt.sh
+if ( echo $DISTRIB_ID | grep -E -iq "centos|red|fedora|amzn" );then
+    # ensure no conflict between curl & curl-minimal
+    yum install -y --allowerasing curl || yum install -y curl
+fi
 export FORCE_INSTALL=y
 DO_UPDATE="$DO_UPDATE" WANTED_PACKAGES="$pkgs" ./cops_pkgmgr_install.sh
 install_gpg
@@ -271,4 +283,4 @@ if ! ( echo foo|envsubst >/dev/null 2>&1);then
     fi
 fi
 find /etc/rsyslog.d -name "*.conf" -not -type d |while read f;do mv -vf "$f" "$f.sample";done
-# vim:set et sts=4 ts=4 tw=0:
+# Vim:set et sts=4 ts=4 tw=0:
